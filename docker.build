@@ -1,0 +1,8 @@
+sudo docker buildx build --rm \
+    --platform=linux/amd64 \
+    -t postgres_postgis:14.7 \
+    --build-arg proj_version=7.1.0 \
+    --build-arg gdal_version=3.4.1 \
+    --build-arg geos_version=3.9.2 \
+    --build-arg postgis_version=3.2.0 \
+    --build-arg postgres_version=14.7 .

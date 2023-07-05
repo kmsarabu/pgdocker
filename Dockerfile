@@ -1,14 +1,19 @@
 from ubuntu:18.04
 ARG DEBIAN_FRONTEND=noninteractive
-ARG postgres_version=15.2
-ARG pgvector_version=0.4.2
+ENV TZ=US
+ARG proj_version=7.1.0
+ARG gdal_version=3.7.0
+ARG geos_version=3.8.1
+ARG postgis_version=3.0.2
+ARG postgres_version=12.6
 ARG pgpassword=postgres
+ENV proj_version=${proj_version}
+ENV gdal_version=${gdal_version}
+ENV geos_version=${geos_version}
+ENV postgis_version=${postgis_version}
 ENV postgres_version=${postgres_version}
 ENV pgpassword=${pgpassword}
 ENV PGDATA /pgdata/db1
-ENV TZ=US
-
-VOLUME /pgdata
 
 RUN apt-get update
 
@@ -45,33 +50,59 @@ RUN mkdir -p $PGHOME /home/postgres/work && chown -hR postgres:postgres /app && 
     mkdir -p "$PGDATA" && chown -R postgres:postgres "$PGDATA" && chmod 777 "$PGDATA"
 
 USER postgres
-
 WORKDIR /home/postgres/work
 
 RUN wget https://ftp.postgresql.org/pub/source/v${postgres_version}/postgresql-${postgres_version}.tar.gz && \
     tar -xvzf postgresql-${postgres_version}.tar.gz && \
     cd postgresql-${postgres_version}/ && \
-    ./configure --prefix=$PGHOME --with-perl --with-tcl --with-gssapi --with-openssl --with-pam --with-ldap --with-ossp-uuid && \
+    ./configure --prefix=$PGHOME --with-perl --with-tcl --with-gssapi --with-openssl --with-pam --with-ldap --with-ossp-uuid --with-libxml --with-libxslt && \
     make world  && \
     make install-world && \
     cd ..
 
-RUN wget https://github.com/pgvector/pgvector/archive/refs/tags/v${pgvector_version}.tar.gz && \
-    tar -xvzf v${pgvector_version}.tar.gz && \
-    cd pgvector-${pgvector_version} && \
-    make install && \
+RUN wget https://download.osgeo.org/proj/proj-${proj_version}.tar.gz && \
+    tar -xvzf proj-${proj_version}.tar.gz && \
+    cd proj-${proj_version} && \
+    ./configure --prefix=$PGBASE/proj && \
+    make && make install && \
     cd ..
 
-COPY docker-entrypoint.sh /usr/local/bin/
+RUN wget http://download.osgeo.org/geos/geos-${geos_version}.tar.bz2 && \
+    bzip2 -d geos-${geos_version}.tar.bz2 && tar -xvf geos-${geos_version}.tar && \
+    cd geos-${geos_version}/ && \
+    ./configure --prefix=$PGBASE/geos && \
+    make && make install && \
+    cd ..
 
+RUN wget https://github.com/OSGeo/gdal/releases/download/v${gdal_version}/gdal-${gdal_version}.tar.gz && \
+    tar -xvzf gdal-${gdal_version}.tar.gz && \
+    cd gdal-${gdal_version} && \
+    ./configure --prefix=$PGBASE/gdal --with-proj=$PGBASE/proj && \
+    make && make install && \
+    cd ..
+
+RUN wget http://download.osgeo.org/postgis/source/postgis-${postgis_version}.tar.gz && \
+    tar -xvzf postgis-${postgis_version}.tar.gz && \
+    cd postgis-${postgis_version} && \
+    ./configure --with-geosconfig=$PGBASE/geos/bin/geos-config \
+       --with-gdalconfig=$PGBASE/gdal/bin/gdal-config \
+       --with-projdir=$PGBASE/proj \
+       --without-protobuf \
+       --with-pgconfig=$PGHOME/bin/pg_config && \
+    make && make install
+
+
+VOLUME /pgdata/db1
+
+
+COPY docker-entrypoint.sh /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
 STOPSIGNAL SIGINT
-
 EXPOSE 5432
-
 WORKDIR /home/postgres
-
 ENV LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$PGBASE/gdal/lib:$PGBASE/geos/lib:$PGBASE/proj/lib:/usr/local/lib
+
 CMD ["postgres"]
+

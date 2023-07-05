@@ -1,0 +1,12 @@
+docker run --rm -d --name=pg147 \
+     --platform=linux/amd64 \
+     --publish 5432:5432 \
+     -v pg147:/pgdata/db1 \
+     postgres_postgis:14.7
+
+docker run --rm -d --name pgadmin4 \
+     --platform=linux/amd64 \
+     -e PGADMIN_DEFAULT_EMAIL=krishna.sarabu@gmail.com \
+     -e PGADMIN_DEFAULT_PASSWORD=postgres \
+     -p 80:80 dpage/pgadmin4
+
